@@ -31,6 +31,20 @@ import (
 	"net/http"
 )
 
+var syncType = []struct {
+	postfix          string
+	asyncForBindings bool
+}{
+	{
+		postfix:          "",
+		asyncForBindings: false,
+	},
+	{
+		postfix:          " async",
+		asyncForBindings: true,
+	},
+}
+
 // TestCreateServiceBindingSuccess successful paths binding
 func TestCreateServiceBindingSuccess(t *testing.T) {
 	cases := []struct {
@@ -40,24 +54,27 @@ func TestCreateServiceBindingSuccess(t *testing.T) {
 			name: "defaults",
 		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ct := &controllerTest{
-				t:        t,
-				broker:   getTestBroker(),
-				instance: getTestInstance(),
-				binding:  getTestBinding(),
-			}
-			ct.run(func(ct *controllerTest) {
-				condition := v1beta1.ServiceBindingCondition{
-					Type:   v1beta1.ServiceBindingConditionReady,
-					Status: v1beta1.ConditionTrue,
+	for _, st := range syncType {
+		for _, tc := range cases {
+			t.Run(tc.name+st.postfix, func(t *testing.T) {
+				ct := &controllerTest{
+					t:                t,
+					broker:           getTestBroker(),
+					instance:         getTestInstance(),
+					binding:          getTestBinding(),
+					asyncForBindings: st.asyncForBindings,
 				}
-				if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, condition); err != nil {
-					t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, condition, cond)
-				}
+				ct.run(func(ct *controllerTest) {
+					condition := v1beta1.ServiceBindingCondition{
+						Type:   v1beta1.ServiceBindingConditionReady,
+						Status: v1beta1.ConditionTrue,
+					}
+					if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, condition); err != nil {
+						t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, condition, cond)
+					}
+				})
 			})
-		})
+		}
 	}
 }
 
@@ -72,24 +89,27 @@ func TestCreateServiceBindingInvalidInstanceFailure(t *testing.T) {
 			instanceName: strPtr(""),
 		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ct := &controllerTest{
-				t:        t,
-				broker:   getTestBroker(),
-				instance: getTestInstance(),
-			}
-			ct.run(func(ct *controllerTest) {
-				binding := getTestBinding()
-				if tc.instanceName != nil {
-					binding.Spec.ServiceInstanceRef.Name = *tc.instanceName
+	for _, st := range syncType {
+		for _, tc := range cases {
+			t.Run(tc.name+st.postfix, func(t *testing.T) {
+				ct := &controllerTest{
+					t:                t,
+					broker:           getTestBroker(),
+					instance:         getTestInstance(),
+					asyncForBindings: st.asyncForBindings,
 				}
+				ct.run(func(ct *controllerTest) {
+					binding := getTestBinding()
+					if tc.instanceName != nil {
+						binding.Spec.ServiceInstanceRef.Name = *tc.instanceName
+					}
 
-				if _, err := ct.client.ServiceBindings(binding.Namespace).Create(binding); err == nil {
-					t.Fatalf("expected binding to fail to be created due to invalid parameters")
-				}
+					if _, err := ct.client.ServiceBindings(binding.Namespace).Create(binding); err == nil {
+						t.Fatalf("expected binding to fail to be created due to invalid parameters")
+					}
+				})
 			})
-		})
+		}
 	}
 }
 
@@ -103,7 +123,6 @@ func TestCreateServiceBindingInvalidInstance(t *testing.T) {
 		{
 			name:         "non-existent service instance name",
 			instanceName: strPtr("nothereinstance"),
-
 			condition: v1beta1.ServiceBindingCondition{
 				Type:   v1beta1.ServiceBindingConditionReady,
 				Status: v1beta1.ConditionFalse,
@@ -111,27 +130,30 @@ func TestCreateServiceBindingInvalidInstance(t *testing.T) {
 			},
 		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ct := &controllerTest{
-				t:        t,
-				broker:   getTestBroker(),
-				instance: getTestInstance(),
-				binding: func() *v1beta1.ServiceBinding {
-					b := getTestBinding()
-					if tc.instanceName != nil {
-						b.Spec.ServiceInstanceRef.Name = *tc.instanceName
-					}
-					return b
-				}(),
-				skipVerifyingBindingSuccess: true,
-			}
-			ct.run(func(ct *controllerTest) {
-				if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, tc.condition); err != nil {
-					t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, tc.condition, cond)
+	for _, st := range syncType {
+		for _, tc := range cases {
+			t.Run(tc.name+st.postfix, func(t *testing.T) {
+				ct := &controllerTest{
+					t:        t,
+					broker:   getTestBroker(),
+					instance: getTestInstance(),
+					binding: func() *v1beta1.ServiceBinding {
+						b := getTestBinding()
+						if tc.instanceName != nil {
+							b.Spec.ServiceInstanceRef.Name = *tc.instanceName
+						}
+						return b
+					}(),
+					asyncForBindings:            st.asyncForBindings,
+					skipVerifyingBindingSuccess: true,
 				}
+				ct.run(func(ct *controllerTest) {
+					if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, tc.condition); err != nil {
+						t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, tc.condition, cond)
+					}
+				})
 			})
-		})
+		}
 	}
 }
 
@@ -152,27 +174,30 @@ func TestCreateServiceBindingNonBindable(t *testing.T) {
 			},
 		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ct := &controllerTest{
-				t:      t,
-				broker: getTestBroker(),
-				instance: func() *v1beta1.ServiceInstance {
-					i := getTestInstance()
-					if tc.nonbindablePlan {
-						i.Spec.PlanReference.ClusterServicePlanExternalName = testNonbindableClusterServicePlanName
-					}
-					return i
-				}(),
-				binding:                     getTestBinding(),
-				skipVerifyingBindingSuccess: true,
-			}
-			ct.run(func(ct *controllerTest) {
-				if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, tc.condition); err != nil {
-					t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, tc.condition, cond)
+	for _, st := range syncType {
+		for _, tc := range cases {
+			t.Run(tc.name+st.postfix, func(t *testing.T) {
+				ct := &controllerTest{
+					t:      t,
+					broker: getTestBroker(),
+					instance: func() *v1beta1.ServiceInstance {
+						i := getTestInstance()
+						if tc.nonbindablePlan {
+							i.Spec.PlanReference.ClusterServicePlanExternalName = testNonbindableClusterServicePlanName
+						}
+						return i
+					}(),
+					binding:                     getTestBinding(),
+					asyncForBindings:            st.asyncForBindings,
+					skipVerifyingBindingSuccess: true,
 				}
+				ct.run(func(ct *controllerTest) {
+					if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, tc.condition); err != nil {
+						t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, tc.condition, cond)
+					}
+				})
 			})
-		})
+		}
 	}
 }
 
@@ -193,34 +218,37 @@ func TestCreateServiceBindingInstanceNotReady(t *testing.T) {
 			},
 		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ct := &controllerTest{
-				t:        t,
-				broker:   getTestBroker(),
-				instance: getTestInstance(),
-				binding:  getTestBinding(),
-				setup: func(ct *controllerTest) {
-					if tc.instanceNotReady {
-						reactionError := osb.HTTPStatusCodeError{
-							StatusCode:   http.StatusBadGateway,
-							ErrorMessage: strPtr("error message"),
-							Description:  strPtr("response description"),
+	for _, st := range syncType {
+		for _, tc := range cases {
+			t.Run(tc.name+st.postfix, func(t *testing.T) {
+				ct := &controllerTest{
+					t:        t,
+					broker:   getTestBroker(),
+					instance: getTestInstance(),
+					binding:  getTestBinding(),
+					setup: func(ct *controllerTest) {
+						if tc.instanceNotReady {
+							reactionError := osb.HTTPStatusCodeError{
+								StatusCode:   http.StatusBadGateway,
+								ErrorMessage: strPtr("error message"),
+								Description:  strPtr("response description"),
+							}
+							ct.osbClient.ProvisionReaction = &fakeosb.ProvisionReaction{
+								Error: reactionError,
+							}
+							ct.skipVerifyingInstanceSuccess = true
 						}
-						ct.osbClient.ProvisionReaction = &fakeosb.ProvisionReaction{
-							Error: reactionError,
-						}
-						ct.skipVerifyingInstanceSuccess = true
-					}
-				},
-				skipVerifyingBindingSuccess: true,
-			}
-			ct.run(func(ct *controllerTest) {
-				if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, tc.condition); err != nil {
-					t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, tc.condition, cond)
+					},
+					asyncForBindings:            st.asyncForBindings,
+					skipVerifyingBindingSuccess: true,
 				}
+				ct.run(func(ct *controllerTest) {
+					if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, tc.condition); err != nil {
+						t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, tc.condition, cond)
+					}
+				})
 			})
-		})
+		}
 	}
 }
 
@@ -415,44 +443,47 @@ func TestCreateServiceBindingWithParameters(t *testing.T) {
 			expectedParams: nil,
 		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ct := &controllerTest{
-				t:        t,
-				broker:   getTestBroker(),
-				instance: getTestInstance(),
-				binding: func() *v1beta1.ServiceBinding {
-					b := getTestBinding()
-					if tc.params != nil {
-						b.Spec.Parameters = convertParametersIntoRawExtension(t, tc.params)
-					}
-					b.Spec.ParametersFrom = tc.paramsFrom
-					return b
-				}(),
-				skipVerifyingBindingSuccess: tc.expectedError,
-				setup: func(ct *controllerTest) {
-					for _, secret := range tc.secrets {
-						prependGetSecretReaction(ct.kubeClient, secret.name, secret.data)
-					}
-				},
-			}
-			ct.run(func(ct *controllerTest) {
-				if tc.expectedError {
-					condition := v1beta1.ServiceBindingCondition{
-						Type:   v1beta1.ServiceBindingConditionReady,
-						Status: v1beta1.ConditionFalse,
-						Reason: "ErrorWithParameters",
-					}
-					if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, condition); err != nil {
-						t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, condition, cond)
-					}
-				} else {
-					brokerAction := getLastBrokerAction(t, ct.osbClient, fakeosb.Bind)
-					if e, a := tc.expectedParams, brokerAction.Request.(*osb.BindRequest).Parameters; !reflect.DeepEqual(e, a) {
-						t.Fatalf("unexpected diff in provision parameters: expected %v, got %v", e, a)
-					}
+	for _, st := range syncType {
+		for _, tc := range cases {
+			t.Run(tc.name+st.postfix, func(t *testing.T) {
+				ct := &controllerTest{
+					t:        t,
+					broker:   getTestBroker(),
+					instance: getTestInstance(),
+					binding: func() *v1beta1.ServiceBinding {
+						b := getTestBinding()
+						if tc.params != nil {
+							b.Spec.Parameters = convertParametersIntoRawExtension(t, tc.params)
+						}
+						b.Spec.ParametersFrom = tc.paramsFrom
+						return b
+					}(),
+					asyncForBindings:            st.asyncForBindings,
+					skipVerifyingBindingSuccess: tc.expectedError,
+					setup: func(ct *controllerTest) {
+						for _, secret := range tc.secrets {
+							prependGetSecretReaction(ct.kubeClient, secret.name, secret.data)
+						}
+					},
 				}
+				ct.run(func(ct *controllerTest) {
+					if tc.expectedError {
+						condition := v1beta1.ServiceBindingCondition{
+							Type:   v1beta1.ServiceBindingConditionReady,
+							Status: v1beta1.ConditionFalse,
+							Reason: "ErrorWithParameters",
+						}
+						if cond, err := util.WaitForBindingCondition(ct.client, testNamespace, testBindingName, condition); err != nil {
+							t.Fatalf("error waiting for binding condition: %v\n"+"expecting: %+v\n"+"last seen: %+v", err, condition, cond)
+						}
+					} else {
+						brokerAction := getLastBrokerAction(t, ct.osbClient, fakeosb.Bind)
+						if e, a := tc.expectedParams, brokerAction.Request.(*osb.BindRequest).Parameters; !reflect.DeepEqual(e, a) {
+							t.Fatalf("unexpected diff in provision parameters: expected %v, got %v", e, a)
+						}
+					}
+				})
 			})
-		})
+		}
 	}
 }

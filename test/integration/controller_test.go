@@ -105,29 +105,13 @@ func TestBasicFlows(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.asyncForBindings {
-				// Enable the AsyncBindingOperations feature
-				utilfeature.DefaultFeatureGate.Set(fmt.Sprintf("%v=true", scfeatures.AsyncBindingOperations))
-				defer utilfeature.DefaultFeatureGate.Set(fmt.Sprintf("%v=false", scfeatures.AsyncBindingOperations))
-			}
-
 			ct := &controllerTest{
-				t:        t,
-				broker:   getTestBroker(),
-				instance: getTestInstance(),
-				binding:  getTestBinding(),
-				setup: func(ct *controllerTest) {
-					if tc.asyncForInstances {
-						ct.osbClient.ProvisionReaction.(*fakeosb.ProvisionReaction).Response.Async = true
-						ct.osbClient.UpdateInstanceReaction.(*fakeosb.UpdateInstanceReaction).Response.Async = true
-						ct.osbClient.DeprovisionReaction.(*fakeosb.DeprovisionReaction).Response.Async = true
-					}
-
-					if tc.asyncForBindings {
-						ct.osbClient.BindReaction.(*fakeosb.BindReaction).Response.Async = true
-						ct.osbClient.UnbindReaction.(*fakeosb.UnbindReaction).Response.Async = true
-					}
-				},
+				t:                 t,
+				broker:            getTestBroker(),
+				instance:          getTestInstance(),
+				binding:           getTestBinding(),
+				asyncForInstances: tc.asyncForInstances,
+				asyncForBindings:  tc.asyncForBindings,
 			}
 			ct.run(func(ct *controllerTest) {
 				// Update instance
@@ -721,6 +705,11 @@ type controllerTest struct {
 	// This is not updated after creation, so will not reflect any updates.
 	binding *v1beta1.ServiceBinding
 
+	// create all instances asynchronously
+	asyncForInstances bool
+	// create all bindings asynchronously
+	asyncForBindings bool
+
 	// true if the verification that the broker was created and reconciled
 	// successfully should be skipped. This is useful for tests where the
 	// reconciliation is expected to fail.
@@ -802,6 +791,12 @@ func (ct *controllerTest) run(test func(*controllerTest)) {
 
 	ct.client = catalogClient.ServicecatalogV1beta1()
 
+	if ct.asyncForBindings {
+		// Enable the AsyncBindingOperations feature
+		utilfeature.DefaultFeatureGate.Set(fmt.Sprintf("%v=true", scfeatures.AsyncBindingOperations))
+		defer utilfeature.DefaultFeatureGate.Set(fmt.Sprintf("%v=false", scfeatures.AsyncBindingOperations))
+	}
+
 	if ct.setup != nil {
 		ct.setup(ct)
 	}
@@ -823,6 +818,11 @@ func (ct *controllerTest) run(test func(*controllerTest)) {
 	}
 
 	if ct.instance != nil {
+		if ct.asyncForInstances {
+			ct.osbClient.ProvisionReaction.(*fakeosb.ProvisionReaction).Response.Async = true
+			ct.osbClient.UpdateInstanceReaction.(*fakeosb.UpdateInstanceReaction).Response.Async = true
+			ct.osbClient.DeprovisionReaction.(*fakeosb.DeprovisionReaction).Response.Async = true
+		}
 		if ct.preCreateInstance != nil {
 			ct.preCreateInstance(ct)
 		}
@@ -838,6 +838,10 @@ func (ct *controllerTest) run(test func(*controllerTest)) {
 	}
 
 	if ct.binding != nil {
+		if ct.asyncForBindings {
+			ct.osbClient.BindReaction.(*fakeosb.BindReaction).Response.Async = true
+			ct.osbClient.UnbindReaction.(*fakeosb.UnbindReaction).Response.Async = true
+		}
 		if ct.preCreateBinding != nil {
 			ct.preCreateBinding(ct)
 		}
