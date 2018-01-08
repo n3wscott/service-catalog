@@ -20,6 +20,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/kubernetes-incubator/service-catalog/pkg/registry/servicecatalog/server"
 	"k8s.io/apiserver/pkg/registry/generic"
+	//"k8s.io/apiserver/pkg/registry/generic/registry"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/storage"
 )
@@ -79,7 +80,7 @@ type completedEtcdConfig struct {
 
 // NewServer creates a new server that can be run. Returns a non-nil error if the server couldn't
 // be created
-func (c completedEtcdConfig) NewServer() (*ServiceCatalogAPIServer, error) {
+func (c completedEtcdConfig) NewServer(stopCh <-chan struct{}) (*ServiceCatalogAPIServer, error) {
 	s, err := createSkeletonServer(c.genericConfig)
 	if err != nil {
 		return nil, err
@@ -111,6 +112,24 @@ func (c completedEtcdConfig) NewServer() (*ServiceCatalogAPIServer, error) {
 		if err := s.GenericAPIServer.InstallAPIGroup(groupInfo); err != nil {
 			glog.Fatalf("Error installing API group %v: %v", provider.GroupName(), err)
 		}
+
+		// it would help to call provider stop when the service is getting shut down here.
+		go func() {
+			<-stopCh
+
+			for version, stores := range groupInfo.VersionedResourcesStorageMap {
+				glog.Infoln("Shutting down client storage connections for", version)
+				for k, _ := range stores {
+					glog.Infoln(" ->", k)
+
+					//store, ok := v.(registry.Store)
+					//if ok {
+					//	glog.Infoln(" !", store)
+					//}
+				}
+			}
+
+		}()
 	}
 
 	glog.Infoln("Finished installing API groups")

@@ -18,8 +18,38 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# This emulates "readlink -f" which is not available on MacOS X.
+function sc::readlinkdashf {
+  # run in a subshell for simpler 'cd'
+  (
+    if [[ -d "$1" ]]; then # This also catch symlinks to dirs.
+      cd "$1"
+      pwd -P
+    else
+      cd $(dirname "$1")
+      local f
+      f=$(basename "$1")
+      if [[ -L "$f" ]]; then
+        readlink "$f"
+      else
+        echo "$(pwd -P)/${f}"
+      fi
+    fi
+  )
+}
+
+# This emulates "realpath" which is not available on MacOS X
+sc::realpath() {
+  if [[ ! -e "$1" ]]; then
+    echo "$1: No such file or directory" >&2
+    return 1
+  fi
+  sc::readlinkdashf "$1"
+}
+
+
 # this script resides in the `test/` folder at the root of the project
-KUBE_ROOT=$(realpath $(dirname "${BASH_SOURCE}")/../pkg/kubernetes)
+KUBE_ROOT=$(sc::realpath $(dirname "${BASH_SOURCE}")/../pkg/kubernetes)
 source "${KUBE_ROOT}/hack/lib/init.sh"
 GOROOT=$(go env GOROOT)
 

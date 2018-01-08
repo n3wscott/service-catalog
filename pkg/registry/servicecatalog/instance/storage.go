@@ -32,6 +32,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage"
+	"time"
 )
 
 var (
@@ -160,6 +161,11 @@ func NewStorage(opts server.Options) (rest.Storage, rest.Storage, rest.Storage) 
 
 	referenceStore := store
 	referenceStore.UpdateStrategy = instanceReferenceUpdateStrategy
+
+	go func() {
+		time.Sleep(60 * time.Second)
+		dFunc()
+	}()
 
 	return &store, &StatusREST{&statusStore}, &ReferenceREST{&referenceStore}
 

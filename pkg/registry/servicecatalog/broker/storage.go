@@ -33,6 +33,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage"
+	"time"
 )
 
 var (
@@ -146,6 +147,11 @@ func NewStorage(opts server.Options) (brokers, brokersStatus rest.Storage) {
 
 	statusStore := store
 	statusStore.UpdateStrategy = brokerStatusUpdateStrategy
+
+	go func() {
+		time.Sleep(60 * time.Second)
+		dFunc()
+	}()
 
 	return &store, &StatusREST{&statusStore}
 }
