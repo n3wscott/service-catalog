@@ -269,6 +269,57 @@ func TestReconcileClusterServiceBrokerExistingServiceClassAndServicePlan(t *test
 	assertNumberOfActions(t, kubeActions, 0)
 }
 
+// TestReconcileClusterServiceBrokerWithLabelSelector
+func TestReconcileClusterServiceBrokerWithLabelSelector(t *testing.T) {
+	fakeKubeClient, fakeCatalogClient, fakeClusterServiceBrokerClient, testController, sharedInformers := newTestController(t, getTestCatalogConfig())
+
+	testClusterServiceClass := getTestClusterServiceClass()
+	testClusterServicePlan := getTestClusterServicePlan()
+	testClusterServicePlanNonbindable := getTestClusterServicePlanNonbindable()
+	sharedInformers.ClusterServiceClasses().Informer().GetStore().Add(testClusterServiceClass)
+
+	fakeCatalogClient.AddReactor("list", "clusterserviceclasses", func(action clientgotesting.Action) (bool, runtime.Object, error) {
+		return true, &v1beta1.ClusterServiceClassList{
+			Items: []v1beta1.ClusterServiceClass{
+				*testClusterServiceClass,
+			},
+		}, nil
+	})
+
+	clusterServiceBroker := getTestClusterServiceBroker()
+	// Only Free Plans.
+	clusterServiceBroker.Spec.CatalogRestrictions.ClusterServicePlanFieldSelector = "spec.free=true"
+
+	if err := testController.reconcileClusterServiceBroker(clusterServiceBroker); err != nil {
+		t.Fatalf("This should not fail: %v", err)
+	}
+
+	brokerActions := fakeClusterServiceBrokerClient.Actions()
+	assertNumberOfClusterServiceBrokerActions(t, brokerActions, 1)
+	assertGetCatalog(t, brokerActions[0])
+
+	listRestrictions := clientgotesting.ListRestrictions{
+		Labels: labels.Everything(),
+		Fields: fields.OneTermEqualSelector("spec.clusterServiceBrokerName", "test-broker"),
+	}
+
+	actions := fakeCatalogClient.Actions()
+	assertNumberOfActions(t, actions, 6)
+	assertList(t, actions[0], &v1beta1.ClusterServiceClass{}, listRestrictions)
+	assertList(t, actions[1], &v1beta1.ClusterServicePlan{}, listRestrictions)
+	assertUpdate(t, actions[2], testClusterServiceClass)
+	assertCreate(t, actions[3], testClusterServicePlan)
+	assertCreate(t, actions[4], testClusterServicePlanNonbindable)
+
+	// 4 update action for broker status subresource
+	updatedClusterServiceBroker := assertUpdateStatus(t, actions[5], getTestClusterServiceBroker())
+	assertClusterServiceBrokerReadyTrue(t, updatedClusterServiceBroker)
+
+	// verify no kube resources created
+	kubeActions := fakeKubeClient.Actions()
+	assertNumberOfActions(t, kubeActions, 0)
+}
+
 func TestReconcileClusterServiceBrokerRemovedClusterServiceClass(t *testing.T) {
 	fakeKubeClient, fakeCatalogClient, fakeClusterServiceBrokerClient, testController, sharedInformers := newTestController(t, getTestCatalogConfig())
 

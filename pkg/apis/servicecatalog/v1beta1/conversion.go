@@ -16,12 +16,30 @@ limitations under the License.
 
 package v1beta1
 
-import "fmt"
+import (
+	"fmt"
+
+	"strconv"
+
+	"k8s.io/apimachinery/pkg/fields"
+)
 
 // These functions are used for field selectors. They are only needed if
 // field selection is made available for types, hence we only have them for
 // ServicePlan and ServiceClass. While they are identical, it's clearer to
 // use different functions from the get go.
+
+func ClusterServicePlanFieldsSet(plan *ClusterServicePlan) fields.Set {
+
+	return fields.Set{
+		"spec.externalID":                  plan.Spec.ExternalID,
+		"spec.externalName":                plan.Spec.ExternalName,
+		"spec.clusterServiceBrokerName":    plan.Spec.ClusterServiceBrokerName,
+		"spec.clusterServiceClassRef.name": plan.Spec.ClusterServiceClassRef.Name,
+		"spec.free":                        strconv.FormatBool(plan.Spec.Free),
+	}
+
+}
 
 // ClusterServicePlanFieldLabelConversionFunc does not convert anything, just returns
 // what it's given for the supported fields, and errors for unsupported.

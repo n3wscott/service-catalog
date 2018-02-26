@@ -253,9 +253,21 @@ func (c *controller) reconcileClusterServiceBroker(broker *v1beta1.ClusterServic
 			}
 		}
 
+		classSelector, err := fields.ParseSelector(broker.Spec.CatalogRestrictions.ClusterServiceClassFieldSelector)
+		if err != nil {
+			s := fmt.Sprintf("Error from ParseSelector for classSelector: %s", broker.Spec.CatalogRestrictions.ClusterServiceClassFieldSelector, err)
+			glog.Warning(pcb.Message(s))
+		}
+
+		planSelector, err := fields.ParseSelector(broker.Spec.CatalogRestrictions.ClusterServicePlanFieldSelector)
+		if err != nil {
+			s := fmt.Sprintf("Error from ParseSelector for planSelector: %s", broker.Spec.CatalogRestrictions.ClusterServicePlanFieldSelector, err)
+			glog.Warning(pcb.Message(s))
+		}
+
 		// convert the broker's catalog payload into our API objects
 		glog.V(4).Info(pcb.Message("Converting catalog response into service-catalog API"))
-		payloadServiceClasses, payloadServicePlans, err := convertCatalog(brokerCatalog)
+		payloadServiceClasses, payloadServicePlans, err := convertCatalog(brokerCatalog, classSelector, planSelector)
 		if err != nil {
 			s := fmt.Sprintf("Error converting catalog payload for broker %q to service-catalog API: %s", broker.Name, err)
 			glog.Warning(pcb.Message(s))

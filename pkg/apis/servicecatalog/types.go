@@ -18,6 +18,7 @@ package servicecatalog
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -81,6 +82,17 @@ type ClusterServiceBrokerSpec struct {
 	// RelistRequests is a strictly increasing, non-negative integer counter that
 	// can be manually incremented by a user to manually trigger a relist.
 	RelistRequests int64
+
+	// CatalogRestrictions allows adding field selectors onto Class/Plan fields on relist.
+	// +optional
+	CatalogRestrictions *ServiceClassCatalogRestrictions
+}
+
+type ServiceClassCatalogRestrictions struct {
+	// A selector for cluster service plans based on plan fields
+	ClusterServicePlanFieldSelector fields.Selector
+	// A selector for cluster service classes based on class fields
+	ClusterServiceClassFieldSelector fields.Selector
 }
 
 // ServiceBrokerRelistBehavior represents a type of broker relist behavior.

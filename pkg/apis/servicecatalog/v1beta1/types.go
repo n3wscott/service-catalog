@@ -92,6 +92,19 @@ type ClusterServiceBrokerSpec struct {
 	// can be manually incremented by a user to manually trigger a relist.
 	// +optional
 	RelistRequests int64 `json:"relistRequests"`
+
+	// CatalogRestrictions allows adding field selectors onto Class/Plan fields on relist.
+	// +optional
+	CatalogRestrictions ServiceClassCatalogRestrictions `json:"catalogRestrictions,omitempty"`
+}
+
+type ServiceClassCatalogRestrictions struct {
+	// A selector for cluster service plans based on plan fields
+	// +optional
+	ClusterServicePlanFieldSelector string `json:"clusterServicePlanFieldSelector,omitempty"`
+	// A selector for cluster service classes based on class fields
+	// +optional
+	ClusterServiceClassFieldSelector string `json:"clusterServiceClassFieldSelector,omitempty"`
 }
 
 // ServiceBrokerRelistBehavior represents a type of broker relist behavior.

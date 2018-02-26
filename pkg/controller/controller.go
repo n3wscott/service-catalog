@@ -44,6 +44,7 @@ import (
 	listers "github.com/kubernetes-incubator/service-catalog/pkg/client/listers_generated/servicecatalog/v1beta1"
 	scfeatures "github.com/kubernetes-incubator/service-catalog/pkg/features"
 	pretty "github.com/kubernetes-incubator/service-catalog/pkg/pretty"
+	"k8s.io/apimachinery/pkg/fields"
 )
 
 const (
@@ -478,7 +479,7 @@ func getBearerConfig(secret *corev1.Secret) (*osb.BearerConfig, error) {
 // convertCatalog converts a service broker catalog into an array of
 // ClusterServiceClasses and an array of ClusterServicePlans.  The ClusterServiceClasses and
 // ClusterServicePlans returned by this method are named in K8S with the OSB ID.
-func convertCatalog(in *osb.CatalogResponse) ([]*v1beta1.ClusterServiceClass, []*v1beta1.ClusterServicePlan, error) {
+func convertCatalog(in *osb.CatalogResponse, classSelector, planSelector fields.Selector) ([]*v1beta1.ClusterServiceClass, []*v1beta1.ClusterServicePlan, error) {
 	serviceClasses := make([]*v1beta1.ClusterServiceClass, len(in.Services))
 	servicePlans := []*v1beta1.ClusterServicePlan{}
 	for i, svc := range in.Services {
@@ -511,7 +512,7 @@ func convertCatalog(in *osb.CatalogResponse) ([]*v1beta1.ClusterServiceClass, []
 		serviceClasses[i].SetName(svc.ID)
 
 		// set up the plans using the ClusterServiceClass Name
-		plans, err := convertClusterServicePlans(svc.Plans, serviceClasses[i].Name)
+		plans, err := convertClusterServicePlans(svc.Plans, serviceClasses[i].Name, planSelector)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -520,7 +521,7 @@ func convertCatalog(in *osb.CatalogResponse) ([]*v1beta1.ClusterServiceClass, []
 	return serviceClasses, servicePlans, nil
 }
 
-func convertClusterServicePlans(plans []osb.Plan, serviceClassID string) ([]*v1beta1.ClusterServicePlan, error) {
+func convertClusterServicePlans(plans []osb.Plan, serviceClassID string, planSelector fields.Selector) ([]*v1beta1.ClusterServicePlan, error) {
 	if 0 == len(plans) {
 		return nil, fmt.Errorf("ClusterServiceClass (K8S: %q) must have at least one plan", serviceClassID)
 	}
@@ -586,6 +587,13 @@ func convertClusterServicePlans(plans []osb.Plan, serviceClassID string) ([]*v1b
 			}
 		}
 
+		fields := v1beta1.ClusterServicePlanFieldsSet(servicePlans[i])
+
+		if planSelector.Matches(fields) {
+			glog.Info("Plan Matched.")
+		} else {
+			glog.Info("Plan NOT Matched.")
+		}
 	}
 	return servicePlans, nil
 }

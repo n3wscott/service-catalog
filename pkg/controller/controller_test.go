@@ -63,6 +63,7 @@ const (
 	testClusterServicePlanGUID             = "PGUID"
 	testNonbindableClusterServiceClassGUID = "UNBINDABLE-SERVICE"
 	testNonbindableClusterServicePlanGUID  = "UNBINDABLE-PLAN"
+	testPaidClusterServicePlanNameGUID     = "PAID-PLAN"
 	testServiceInstanceGUID                = "IGUID"
 	testServiceBindingGUID                 = "BGUID"
 	testNamespaceGUID                      = "test-ns-uid"
@@ -75,6 +76,7 @@ const (
 	testNonExistentClusterServiceClassName  = "nothere"
 	testNonbindableClusterServiceClassName  = "test-unbindable-serviceclass"
 	testNonbindableClusterServicePlanName   = "test-unbindable-plan"
+	testPaidClusterServicePlanName          = "test-paid-plan"
 	testRemovedClusterServiceClassName      = "removed-test-serviceclass"
 	testRemovedClusterServicePlanName       = "removed-test-plan"
 	testServiceInstanceName                 = "test-instance"
@@ -552,6 +554,12 @@ func getTestCatalog() *osb.CatalogResponse {
 						ID:          testNonbindableClusterServicePlanGUID,
 						Description: "a test plan",
 						Bindable:    falsePtr(),
+					},
+					{
+						Name:        testPaidClusterServicePlanName,
+						Free:        falsePtr(),
+						ID:          testPaidClusterServicePlanNameGUID,
+						Description: "a paid plan",
 					},
 				},
 			},
@@ -1036,7 +1044,7 @@ type bindingParameters struct {
 }
 
 func TestEmptyCatalogConversion(t *testing.T) {
-	serviceClasses, servicePlans, err := convertCatalog(&osb.CatalogResponse{})
+	serviceClasses, servicePlans, err := convertCatalog(&osb.CatalogResponse{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to convertCatalog: %v", err)
 	}
@@ -1054,7 +1062,7 @@ func TestCatalogConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to unmarshal test catalog: %v", err)
 	}
-	serviceClasses, servicePlans, err := convertCatalog(catalog)
+	serviceClasses, servicePlans, err := convertCatalog(catalog, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to convertCatalog: %v", err)
 	}
@@ -1075,7 +1083,7 @@ func TestCatalogConversionWithParameterSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to unmarshal test catalog: %v", err)
 	}
-	serviceClasses, servicePlans, err := convertCatalog(catalog)
+	serviceClasses, servicePlans, err := convertCatalog(catalog, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to convertCatalog: %v", err)
 	}
@@ -1333,7 +1341,7 @@ func TestCatalogConversionClusterServicePlanBindable(t *testing.T) {
 		t.Fatalf("Failed to unmarshal test catalog: %v", err)
 	}
 
-	aclasses, aplans, err := convertCatalog(catalog)
+	aclasses, aplans, err := convertCatalog(catalog, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to convertCatalog: %v", err)
 	}
